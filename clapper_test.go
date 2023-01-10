@@ -46,16 +46,16 @@ func TestEmptyRootCommand(t *testing.T) {
 	} else {
 		lines := []string{
 			`sub-command => ""`,
-			`argument(output) => &clapper.Arg{Name:"output", IsVariadic:false, DefaultValue:"", Value:""}`,
-			`flag(force) => &clapper.Flag{Name:"force", ShortName:"f", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:""}`,
-			`flag(verbose) => &clapper.Flag{Name:"verbose", ShortName:"v", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:""}`,
-			`flag(version) => &clapper.Flag{Name:"version", ShortName:"V", IsBoolean:false, IsInverted:false, DefaultValue:"", Value:""}`,
-			`flag(dir) => &clapper.Flag{Name:"dir", ShortName:"", IsBoolean:false, IsInverted:false, DefaultValue:"/var/users", Value:""}`,
+			`argument(output) => &clapper.Arg{Name:"output", IsVariadic:false, DefaultValue:"", Value:"", ValidVals:map[string]bool(nil)}`,
+			`flag(force) => &clapper.Flag{Name:"force", ShortName:"f", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"", ValidVals:map[string]bool(nil)}`,
+			`flag(verbose) => &clapper.Flag{Name:"verbose", ShortName:"v", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"", ValidVals:map[string]bool(nil)}`,
+			`flag(version) => &clapper.Flag{Name:"version", ShortName:"V", IsBoolean:false, IsInverted:false, DefaultValue:"", Value:"", ValidVals:map[string]bool(nil)}`,
+			`flag(dir) => &clapper.Flag{Name:"dir", ShortName:"", IsBoolean:false, IsInverted:false, DefaultValue:"/var/users", Value:"", ValidVals:map[string]bool(nil)}`,
 		}
 
 		for _, line := range lines {
 			if !strings.Contains(fmt.Sprintf("%s", output), line) {
-				t.Fail()
+				t.Fatalf("got\n%q\nwant line\n%q", output, line)
 			}
 		}
 	}
@@ -77,7 +77,7 @@ func TestUnregisteredRootCommand(t *testing.T) {
 
 		for _, line := range lines {
 			if !strings.Contains(fmt.Sprintf("%s", output), line) {
-				t.Fail()
+				t.Fatalf("got\n%q\nwant line\n%q", output, line)
 			}
 		}
 	}
@@ -128,18 +128,18 @@ func TestValidInvertFlagValues(t *testing.T) {
 		} else {
 			lines := []string{
 				`sub-command => "info"`,
-				`argument(category) => &clapper.Arg{Name:"category", IsVariadic:false, DefaultValue:"manager", Value:"student"}`,
-				`argument(username) => &clapper.Arg{Name:"username", IsVariadic:false, DefaultValue:"", Value:""}`,
-				`argument(subjects) => &clapper.Arg{Name:"subjects", IsVariadic:true, DefaultValue:"", Value:""}`,
-				`flag(version) => &clapper.Flag{Name:"version", ShortName:"V", IsBoolean:false, IsInverted:false, DefaultValue:"1.0.1", Value:""}`,
-				`flag(output) => &clapper.Flag{Name:"output", ShortName:"o", IsBoolean:false, IsInverted:false, DefaultValue:"./", Value:"./opt/dir"}`,
-				`flag(verbose) => &clapper.Flag{Name:"verbose", ShortName:"v", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"true"}`,
-				`flag(clean) => &clapper.Flag{Name:"clean", ShortName:"", IsBoolean:true, IsInverted:true, DefaultValue:"true", Value:"false"}`,
+				`argument(category) => &clapper.Arg{Name:"category", IsVariadic:false, DefaultValue:"manager", Value:"student", ValidVals:map[string]bool{"manager":true, "math":true, "physics":true, "science":true, "student":true, "thatisuday":true}}`,
+				`argument(username) => &clapper.Arg{Name:"username", IsVariadic:false, DefaultValue:"", Value:"", ValidVals:map[string]bool(nil)}`,
+				`argument(subjects) => &clapper.Arg{Name:"subjects", IsVariadic:true, DefaultValue:"", Value:"", ValidVals:map[string]bool(nil)}`,
+				`flag(version) => &clapper.Flag{Name:"version", ShortName:"V", IsBoolean:false, IsInverted:false, DefaultValue:"1.0.1", Value:"", ValidVals:map[string]bool{"":true, "1.0.1":true, "2.0.0":true}}`,
+				`flag(output) => &clapper.Flag{Name:"output", ShortName:"o", IsBoolean:false, IsInverted:false, DefaultValue:"./", Value:"./opt/dir", ValidVals:map[string]bool(nil)}`,
+				`flag(verbose) => &clapper.Flag{Name:"verbose", ShortName:"v", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"true", ValidVals:map[string]bool(nil)}`,
+				`flag(clean) => &clapper.Flag{Name:"clean", ShortName:"", IsBoolean:true, IsInverted:true, DefaultValue:"true", Value:"false", ValidVals:map[string]bool(nil)}`,
 			}
 
 			for _, line := range lines {
 				if !strings.Contains(fmt.Sprintf("%s", output), line) {
-					t.Fail()
+					t.Fatalf("got\n%q\nwant line\n%q", output, line)
 				}
 			}
 		}
@@ -189,17 +189,17 @@ func TestFlagAssignmentSyntax(t *testing.T) {
 		} else {
 			lines := []string{
 				`sub-command => "info"`,
-				`argument(category) => &clapper.Arg{Name:"category", IsVariadic:false, DefaultValue:"manager", Value:"student"}`,
-				`argument(username) => &clapper.Arg{Name:"username", IsVariadic:false, DefaultValue:"", Value:"thatisuday"}`,
-				`argument(subjects) => &clapper.Arg{Name:"subjects", IsVariadic:true, DefaultValue:"", Value:""}`,
-				`flag(version) => &clapper.Flag{Name:"version", ShortName:"V", IsBoolean:false, IsInverted:false, DefaultValue:"1.0.1", Value:"2.0.0"}`,
-				`flag(output) => &clapper.Flag{Name:"output", ShortName:"o", IsBoolean:false, IsInverted:false, DefaultValue:"./", Value:""}`,
-				`flag(verbose) => &clapper.Flag{Name:"verbose", ShortName:"v", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"true"}`,
+				`argument(category) => &clapper.Arg{Name:"category", IsVariadic:false, DefaultValue:"manager", Value:"student", ValidVals:map[string]bool{"manager":true, "math":true, "physics":true, "science":true, "student":true, "thatisuday":true}}`,
+				`argument(username) => &clapper.Arg{Name:"username", IsVariadic:false, DefaultValue:"", Value:"thatisuday", ValidVals:map[string]bool(nil)}`,
+				`argument(subjects) => &clapper.Arg{Name:"subjects", IsVariadic:true, DefaultValue:"", Value:"", ValidVals:map[string]bool(nil)}`,
+				`flag(version) => &clapper.Flag{Name:"version", ShortName:"V", IsBoolean:false, IsInverted:false, DefaultValue:"1.0.1", Value:"2.0.0", ValidVals:map[string]bool{"":true, "1.0.1":true, "2.0.0":true}}`,
+				`flag(output) => &clapper.Flag{Name:"output", ShortName:"o", IsBoolean:false, IsInverted:false, DefaultValue:"./", Value:"", ValidVals:map[string]bool(nil)}`,
+				`flag(verbose) => &clapper.Flag{Name:"verbose", ShortName:"v", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"true", ValidVals:map[string]bool(nil)}`,
 			}
 
 			for _, line := range lines {
 				if !strings.Contains(fmt.Sprintf("%s", output), line) {
-					t.Fail()
+					t.Fatalf("got\n%q\nwant line\n%q", output, line)
 				}
 			}
 		}
@@ -225,18 +225,18 @@ func TestValidVariadicArgumentValues(t *testing.T) {
 		} else {
 			lines := []string{
 				`sub-command => "info"`,
-				`argument(category) => &clapper.Arg{Name:"category", IsVariadic:false, DefaultValue:"manager", Value:"student"}`,
-				`argument(username) => &clapper.Arg{Name:"username", IsVariadic:false, DefaultValue:"", Value:"thatisuday"}`,
-				`argument(subjects) => &clapper.Arg{Name:"subjects", IsVariadic:true, DefaultValue:"", Value:"math,science,physics"}`,
-				`flag(version) => &clapper.Flag{Name:"version", ShortName:"V", IsBoolean:false, IsInverted:false, DefaultValue:"1.0.1", Value:""}`,
-				`flag(output) => &clapper.Flag{Name:"output", ShortName:"o", IsBoolean:false, IsInverted:false, DefaultValue:"./", Value:"./opt/dir"}`,
-				`flag(verbose) => &clapper.Flag{Name:"verbose", ShortName:"v", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"true"}`,
-				`flag(clean) => &clapper.Flag{Name:"clean", ShortName:"", IsBoolean:true, IsInverted:true, DefaultValue:"true", Value:"false"}`,
+				`argument(category) => &clapper.Arg{Name:"category", IsVariadic:false, DefaultValue:"manager", Value:"student", ValidVals:map[string]bool{"manager":true, "math":true, "physics":true, "science":true, "student":true, "thatisuday":true}}`,
+				`argument(username) => &clapper.Arg{Name:"username", IsVariadic:false, DefaultValue:"", Value:"thatisuday", ValidVals:map[string]bool(nil)}`,
+				`argument(subjects) => &clapper.Arg{Name:"subjects", IsVariadic:true, DefaultValue:"", Value:"math,science,physics", ValidVals:map[string]bool(nil)}`,
+				`flag(version) => &clapper.Flag{Name:"version", ShortName:"V", IsBoolean:false, IsInverted:false, DefaultValue:"1.0.1", Value:"", ValidVals:map[string]bool{"":true, "1.0.1":true, "2.0.0":true}}`,
+				`flag(output) => &clapper.Flag{Name:"output", ShortName:"o", IsBoolean:false, IsInverted:false, DefaultValue:"./", Value:"./opt/dir", ValidVals:map[string]bool(nil)}`,
+				`flag(verbose) => &clapper.Flag{Name:"verbose", ShortName:"v", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"true", ValidVals:map[string]bool(nil)}`,
+				`flag(clean) => &clapper.Flag{Name:"clean", ShortName:"", IsBoolean:true, IsInverted:true, DefaultValue:"true", Value:"false", ValidVals:map[string]bool(nil)}`,
 			}
 
 			for _, line := range lines {
 				if !strings.Contains(fmt.Sprintf("%s", output), line) {
-					t.Fail()
+					t.Fatalf("got\n%q\nwant line\n%q", output, line)
 				}
 			}
 		}
@@ -266,16 +266,16 @@ func TestRootCommandWithOptions(t *testing.T) {
 		} else {
 			lines := []string{
 				`sub-command => ""`,
-				`argument(output) => &clapper.Arg{Name:"output", IsVariadic:false, DefaultValue:"", Value:"userinfo"}`,
-				`flag(force) => &clapper.Flag{Name:"force", ShortName:"f", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"true"}`,
-				`flag(verbose) => &clapper.Flag{Name:"verbose", ShortName:"v", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"true"}`,
-				`flag(version) => &clapper.Flag{Name:"version", ShortName:"V", IsBoolean:false, IsInverted:false, DefaultValue:"", Value:"1.0.1"}`,
-				`flag(dir) => &clapper.Flag{Name:"dir", ShortName:"", IsBoolean:false, IsInverted:false, DefaultValue:"/var/users", Value:"./sub/dir"}`,
+				`argument(output) => &clapper.Arg{Name:"output", IsVariadic:false, DefaultValue:"", Value:"userinfo", ValidVals:map[string]bool(nil)}`,
+				`flag(force) => &clapper.Flag{Name:"force", ShortName:"f", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"true", ValidVals:map[string]bool(nil)}`,
+				`flag(verbose) => &clapper.Flag{Name:"verbose", ShortName:"v", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"true", ValidVals:map[string]bool(nil)}`,
+				`flag(version) => &clapper.Flag{Name:"version", ShortName:"V", IsBoolean:false, IsInverted:false, DefaultValue:"", Value:"1.0.1", ValidVals:map[string]bool(nil)}`,
+				`flag(dir) => &clapper.Flag{Name:"dir", ShortName:"", IsBoolean:false, IsInverted:false, DefaultValue:"/var/users", Value:"./sub/dir", ValidVals:map[string]bool(nil)}`,
 			}
 
 			for _, line := range lines {
 				if !strings.Contains(fmt.Sprintf("%s", output), line) {
-					t.Fail()
+					t.Fatalf("got\n%q\nwant line\n%q", output, line)
 				}
 			}
 		}
@@ -301,18 +301,18 @@ func TestSubCommandWithOptions(t *testing.T) {
 		} else {
 			lines := []string{
 				`sub-command => "info"`,
-				`argument(category) => &clapper.Arg{Name:"category", IsVariadic:false, DefaultValue:"manager", Value:"student"}`,
-				`argument(username) => &clapper.Arg{Name:"username", IsVariadic:false, DefaultValue:"", Value:""}`,
-				`argument(subjects) => &clapper.Arg{Name:"subjects", IsVariadic:true, DefaultValue:"", Value:""}`,
-				`flag(version) => &clapper.Flag{Name:"version", ShortName:"V", IsBoolean:false, IsInverted:false, DefaultValue:"1.0.1", Value:""}`,
-				`flag(output) => &clapper.Flag{Name:"output", ShortName:"o", IsBoolean:false, IsInverted:false, DefaultValue:"./", Value:"./opt/dir"}`,
-				`flag(verbose) => &clapper.Flag{Name:"verbose", ShortName:"v", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"true"}`,
-				`flag(clean) => &clapper.Flag{Name:"clean", ShortName:"", IsBoolean:true, IsInverted:true, DefaultValue:"true", Value:""}`,
+				`argument(category) => &clapper.Arg{Name:"category", IsVariadic:false, DefaultValue:"manager", Value:"student", ValidVals:map[string]bool{"manager":true, "math":true, "physics":true, "science":true, "student":true, "thatisuday":true}}`,
+				`argument(username) => &clapper.Arg{Name:"username", IsVariadic:false, DefaultValue:"", Value:"", ValidVals:map[string]bool(nil)}`,
+				`argument(subjects) => &clapper.Arg{Name:"subjects", IsVariadic:true, DefaultValue:"", Value:"", ValidVals:map[string]bool(nil)}`,
+				`flag(version) => &clapper.Flag{Name:"version", ShortName:"V", IsBoolean:false, IsInverted:false, DefaultValue:"1.0.1", Value:"", ValidVals:map[string]bool{"":true, "1.0.1":true, "2.0.0":true}}`,
+				`flag(output) => &clapper.Flag{Name:"output", ShortName:"o", IsBoolean:false, IsInverted:false, DefaultValue:"./", Value:"./opt/dir", ValidVals:map[string]bool(nil)}`,
+				`flag(verbose) => &clapper.Flag{Name:"verbose", ShortName:"v", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"true", ValidVals:map[string]bool(nil)}`,
+				`flag(clean) => &clapper.Flag{Name:"clean", ShortName:"", IsBoolean:true, IsInverted:true, DefaultValue:"true", Value:"", ValidVals:map[string]bool(nil)}`,
 			}
 
 			for _, line := range lines {
 				if !strings.Contains(fmt.Sprintf("%s", output), line) {
-					t.Fail()
+					t.Fatalf("got\n%q\nwant line\n%q", output, line)
 				}
 			}
 		}
@@ -338,19 +338,59 @@ func TestSubCommandWithArguments(t *testing.T) {
 		} else {
 			lines := []string{
 				`sub-command => "info"`,
-				`argument(category) => &clapper.Arg{Name:"category", IsVariadic:false, DefaultValue:"manager", Value:"student"}`,
-				`argument(username) => &clapper.Arg{Name:"username", IsVariadic:false, DefaultValue:"", Value:"thatisuday"}`,
-				`argument(subjects) => &clapper.Arg{Name:"subjects", IsVariadic:true, DefaultValue:"", Value:""}`,
-				`flag(version) => &clapper.Flag{Name:"version", ShortName:"V", IsBoolean:false, IsInverted:false, DefaultValue:"1.0.1", Value:"2.0.0"}`,
-				`flag(output) => &clapper.Flag{Name:"output", ShortName:"o", IsBoolean:false, IsInverted:false, DefaultValue:"./", Value:""}`,
-				`flag(verbose) => &clapper.Flag{Name:"verbose", ShortName:"v", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"true"}`,
+				`argument(category) => &clapper.Arg{Name:"category", IsVariadic:false, DefaultValue:"manager", Value:"student", ValidVals:map[string]bool{"manager":true, "math":true, "physics":true, "science":true, "student":true, "thatisuday":true}}`,
+				`argument(username) => &clapper.Arg{Name:"username", IsVariadic:false, DefaultValue:"", Value:"thatisuday", ValidVals:map[string]bool(nil)}`,
+				`argument(subjects) => &clapper.Arg{Name:"subjects", IsVariadic:true, DefaultValue:"", Value:"", ValidVals:map[string]bool(nil)}`,
+				`flag(version) => &clapper.Flag{Name:"version", ShortName:"V", IsBoolean:false, IsInverted:false, DefaultValue:"1.0.1", Value:"2.0.0", ValidVals:map[string]bool{"":true, "1.0.1":true, "2.0.0":true}}`,
+				`flag(output) => &clapper.Flag{Name:"output", ShortName:"o", IsBoolean:false, IsInverted:false, DefaultValue:"./", Value:"", ValidVals:map[string]bool(nil)}`,
+				`flag(verbose) => &clapper.Flag{Name:"verbose", ShortName:"v", IsBoolean:true, IsInverted:false, DefaultValue:"false", Value:"true", ValidVals:map[string]bool(nil)}`,
 			}
 
 			for _, line := range lines {
 				if !strings.Contains(fmt.Sprintf("%s", output), line) {
-					t.Fail()
+					t.Fatalf("got\n%q\nwant line\n%q", output, line)
 				}
 			}
+		}
+	}
+}
+
+// test validate arg
+func TestInvalidArg(t *testing.T) {
+	// options
+	options := []string{"info", "worker", "-V", "-v", "2.0.0"}
+
+	// command
+	cmd := exec.Command("go", append([]string{"run", "demo/cmd.go"}, options...)...)
+
+	// get output
+	if output, err := cmd.Output(); err != nil {
+		fmt.Println("Error:", err)
+	} else {
+		out := string(output)
+		want := "error => clapper.ErrorUnsupportedValue{Name:\"category\", Value:\"worker\"}\n"
+		if out != want {
+			t.Fatalf("got\n%q\nwant\n%q", out, want)
+		}
+	}
+}
+
+// test validate flag
+func TestInvalidFlag(t *testing.T) {
+	// options
+	options := []string{"info", "student", "-V", "2.0.1", "-v"}
+
+	// command
+	cmd := exec.Command("go", append([]string{"run", "demo/cmd.go"}, options...)...)
+
+	// get output
+	if output, err := cmd.Output(); err != nil {
+		fmt.Println("Error:", err)
+	} else {
+		out := string(output)
+		want := "error => clapper.ErrorUnsupportedValue{Name:\"version\", Value:\"2.0.1\"}\n"
+		if out != want {
+			t.Fatalf("got\n%q\nwant\n%q", out, want)
 		}
 	}
 }

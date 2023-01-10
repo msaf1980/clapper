@@ -186,6 +186,16 @@ func (e ErrorUnsupportedFlag) Error() string {
 	return fmt.Sprintf("unsupported flag %s found in the arguments", e.Name)
 }
 
+// ErrorUnsupportedValue represents an error when command-line arguments contain an unsupported value.
+type ErrorUnsupportedValue struct {
+	Name  string
+	Value string
+}
+
+func (e ErrorUnsupportedValue) Error() string {
+	return fmt.Sprintf("unsupported value %s=%s found in the arguments", e.Name, e.Value)
+}
+
 /*---------------------*/
 
 // Registry holds the configuration of the registered commands.
@@ -255,6 +265,7 @@ func (registry Registry) Parse(values []string) (*CommandConfig, error) {
 	}
 
 	// get `CommandConfig` object from the registry
+	// TODO (deep copy)
 	commandConfig := registry[commandName]
 
 	// process all command-line arguments (except command name)
@@ -317,6 +328,9 @@ func (registry Registry) Parse(values []string) (*CommandConfig, error) {
 				}
 			} else {
 				if nextValue, nextValuesToProcess := nextValue(valuesToProcess); len(nextValue) != 0 && !isFlag(nextValue) {
+					if !flag.Validate(nextValue) {
+						return commandConfig, ErrorUnsupportedValue{flag.Name, nextValue}
+					}
 					flag.Value = nextValue
 					valuesToProcess = nextValuesToProcess
 				}
@@ -328,6 +342,10 @@ func (registry Registry) Parse(values []string) (*CommandConfig, error) {
 
 				// get argument object stored in the `commandConfig`
 				arg := commandConfig.Args[argName]
+
+				if !arg.Validate(value) {
+					return commandConfig, ErrorUnsupportedValue{arg.Name, value}
+				}
 
 				// assign value if value of the argument is empty
 				if len(arg.Value) == 0 {
@@ -416,6 +434,19 @@ func (commandConfig *CommandConfig) AddArg(name string, defaultValue string) (*A
 	return arg, false
 }
 
+// Values of a variadic argument will be concatenated using comma (,).
+// The `defaultValue` argument represents the default value of the argument.
+// All arguments without a default value must be registered first.
+// The `validVals`  argument represents valid values for argument
+// If an argument with given `name` is already registered, then argument registration is skipped
+// and registered `*Arg` object returned.
+// If the argument is already registered, second return value will be `true`.
+func (commandConfig *CommandConfig) AddArgWithValid(name string, defaultValue string, validVals []string) (*Arg, bool) {
+	a, exist := commandConfig.AddArg(name, defaultValue)
+	a.SetValidVals(validVals)
+	return a, exist
+}
+
 // AddFlag method registers a command-line flag with the command.
 // The `name` argument is the long-name of the flag and it should not start with `--` prefix.
 // The `shortName` argument is the short-name of the flag and it should not start with `-` prefix.
@@ -482,6 +513,25 @@ func (commandConfig *CommandConfig) AddFlag(name string, shortName string, isBoo
 	return flag, false
 }
 
+// AddFlag method registers a command-line flag with the command.
+// The `name` argument is the long-name of the flag and it should not start with `--` prefix.
+// The `shortName` argument is the short-name of the flag and it should not start with `-` prefix.
+// The `isBool` argument indicates whether the flag holds a boolean value.
+// A boolean flag doesn't accept an input value such as `--flag=<value>` and its default value is "true".
+// The `defaultValue` argument represents the default value of the flag.
+// In case of a boolean flag, the `defaultValue` is redundant.
+// If the `name` value starts with `no-` prefix, then it is considered as an inverted flag.
+// An inverted flag is registered with the name `<flag>` produced by removing `no-` prefix from `no-<flag>` and its defaut value is "true".
+// When command-line arguments contain `--no-<flag>`, the value of the `<flag>` becomes "false".
+// The `validVals`  argument represents valid values for argument
+// If a flag with given `name` is already registered, then flag registration is skipped and registered `*Flag` object returned.
+// If the flag is already registered, second return value will be `true`.
+func (commandConfig *CommandConfig) AddFlagWithValid(name string, shortName string, isBool bool, defaultValue string, validVals []string) (*Flag, bool) {
+	f, exist := commandConfig.AddFlag(name, shortName, isBool, defaultValue)
+	f.SetValidVals(validVals)
+	return f, exist
+}
+
 /*---------------------*/
 
 // Flag type holds the structured information about a flag.
@@ -504,6 +554,36 @@ type Flag struct {
 
 	// value of the flag (provided by the user)
 	Value string
+
+	// ValidVals is list of all valid arg values that are accepted
+	ValidVals map[string]bool
+
+	// ValidValsFunction is an optional function that provides valid arg values
+	// It is a dynamic version of using ValidArgs.
+	// Only one of ValidArgs and ValidArgsFunction can be used for a command.
+	// ValidValsFunction func(args []string, toComplete string) []string
+}
+
+func (f *Flag) SetValidVals(validVals []string) *Flag {
+	if len(validVals) == 0 {
+		f.ValidVals = nil
+	} else {
+		f.ValidVals = make(map[string]bool)
+		for _, validate := range validVals {
+			f.ValidVals[validate] = true
+		}
+	}
+	return f
+}
+
+func (f *Flag) Validate(v string) bool {
+	if len(f.ValidVals) > 0 {
+		if _, exist := f.ValidVals[v]; exist {
+			return true
+		}
+		return false
+	}
+	return true
 }
 
 /*---------------------*/
@@ -521,4 +601,33 @@ type Arg struct {
 
 	// value of the argument (provided by the user)
 	Value string
+	// ValidVals is list of all valid arg values that are accepted
+	ValidVals map[string]bool
+
+	// ValidValsFunction is an optional function that provides valid arg values
+	// It is a dynamic version of using ValidArgs.
+	// Only one of ValidArgs and ValidArgsFunction can be used for a command.
+	// ValidValsFunction func(args []string, toComplete string) []string
+}
+
+func (a *Arg) SetValidVals(validVals []string) *Arg {
+	if len(validVals) == 0 {
+		a.ValidVals = nil
+	} else {
+		a.ValidVals = make(map[string]bool)
+		for _, validate := range validVals {
+			a.ValidVals[validate] = true
+		}
+	}
+	return a
+}
+
+func (a *Arg) Validate(v string) bool {
+	if len(a.ValidVals) > 0 {
+		if _, exist := a.ValidVals[v]; exist {
+			return true
+		}
+		return false
+	}
+	return true
 }
