@@ -73,7 +73,7 @@ func isInvertedFlag(value string) (bool, string) {
 		return true, strings.TrimLeft(value, "--no-") // trim `--no-` prefix
 	}
 
-	return false, ""
+	return false, strings.TrimLeft(value, "--")
 }
 
 // check if flag is unsupported
@@ -219,9 +219,9 @@ func (registry Registry) Register(name string) (*CommandConfig, bool) {
 	// construct new `CommandConfig` object
 	commandConfig := &CommandConfig{
 		Name:       commandName,
-		Flags:      make(map[string]*Flag),
+		Flags:      make(map[string]*FlagCommand),
 		flagsShort: make(map[string]string),
-		Args:       make(map[string]*Arg),
+		Args:       make(map[string]*ArgCommand),
 		ArgNames:   make([]string, 0),
 	}
 
@@ -234,7 +234,7 @@ func (registry Registry) Register(name string) (*CommandConfig, bool) {
 // Parse method parses command-line arguments and returns an appropriate "*CommandConfig" object registered in the registry.
 // If command is not registered, it return `ErrorUnknownCommand` error.
 // If there is an error parsing a flag, it can return an `ErrorUnknownFlag` or `ErrorUnsupportedFlag` error.
-func (registry Registry) Parse(values []string) (*CommandConfig, error) {
+func (registry Registry) Parse(values []string) (*CommandParsed, error) {
 
 	// command name
 	var commandName string
@@ -259,14 +259,18 @@ func (registry Registry) Parse(values []string) (*CommandConfig, error) {
 		}
 	}
 
+	// get `CommandConfig` object from the registry
 	// if command is not registered, return `ErrorUnknownCommand` error
-	if _, ok := registry[commandName]; !ok {
+	commandConfig, ok := registry[commandName]
+	if !ok {
 		return nil, ErrorUnknownCommand{commandName}
 	}
 
-	// get `CommandConfig` object from the registry
-	// TODO (deep copy)
-	commandConfig := registry[commandName]
+	store := &CommandParsed{
+		Name:  commandConfig.Name,
+		Flags: make(map[string]*Flag),
+		Args:  make(map[string]*Arg),
+	}
 
 	// process all command-line arguments (except command name)
 	for {
@@ -287,51 +291,48 @@ func (registry Registry) Parse(values []string) (*CommandConfig, error) {
 			name := strings.TrimLeft(value, "-")
 
 			// get flag object stored in the `commandConfig`
-			var flag *Flag
+			var flag *FlagCommand
 
 			// check if flag is short or long
 			if isShortFlag(value) {
-				if _, ok := commandConfig.flagsShort[name]; !ok {
+				// get long flag name
+				flagName, ok := commandConfig.flagsShort[name]
+				if !ok {
 					return nil, ErrorUnknownFlag{value}
 				}
 
 				// get long flag name
-				flagName := commandConfig.flagsShort[name]
-
 				flag = commandConfig.Flags[flagName]
 			} else {
 
 				// check if a flag is an inverted flag
 				if ok, flagName := isInvertedFlag(value); ok {
-					if _, ok := commandConfig.Flags[flagName]; !ok {
+					flag, ok = commandConfig.Flags[flagName]
+					if !ok {
 						return nil, ErrorUnknownFlag{value}
 					}
-
-					flag = commandConfig.Flags[flagName]
 				} else {
-
 					// flag should not registered as an inverted flag
-					if _flag, ok := commandConfig.Flags[name]; !ok || _flag.IsInverted {
+					flag, ok = commandConfig.Flags[flagName]
+					if !ok || flag.IsInverted {
 						return nil, ErrorUnknownFlag{value}
 					}
-
-					flag = commandConfig.Flags[name]
 				}
 			}
 
 			// set flag value
 			if flag.IsBoolean {
 				if flag.IsInverted {
-					flag.Value = "false" // if flag is an inverted flag, its value will be `false`
+					store.Flags[flag.Name] = flag.Store("false") // if flag is an inverted flag, its value will be `false`
 				} else {
-					flag.Value = "true"
+					store.Flags[flag.Name] = flag.Store("true")
 				}
 			} else {
 				if nextValue, nextValuesToProcess := nextValue(valuesToProcess); len(nextValue) != 0 && !isFlag(nextValue) {
 					if !flag.Validate(nextValue) {
-						return commandConfig, ErrorUnsupportedValue{flag.Name, nextValue}
+						return nil, ErrorUnsupportedValue{flag.Name, nextValue}
 					}
-					flag.Value = nextValue
+					store.Flags[flag.Name] = flag.Store(nextValue)
 					valuesToProcess = nextValuesToProcess
 				}
 			}
@@ -341,10 +342,19 @@ func (registry Registry) Parse(values []string) (*CommandConfig, error) {
 			for index, argName := range commandConfig.ArgNames {
 
 				// get argument object stored in the `commandConfig`
-				arg := commandConfig.Args[argName]
+				varg := commandConfig.Args[argName]
 
-				if !arg.Validate(value) {
-					return commandConfig, ErrorUnsupportedValue{arg.Name, value}
+				if !varg.Validate(value) {
+					return nil, ErrorUnsupportedValue{varg.Name, value}
+				}
+
+				arg, exist := store.Args[varg.Name]
+				if !exist {
+					arg = &Arg{
+						Name:       varg.Name,
+						IsVariadic: varg.IsVariadic,
+					}
+					store.Args[arg.Name] = arg
 				}
 
 				// assign value if value of the argument is empty
@@ -355,13 +365,24 @@ func (registry Registry) Parse(values []string) (*CommandConfig, error) {
 
 				// if last argument is a variadic argument, append values
 				if (index == len(commandConfig.ArgNames)-1) && arg.IsVariadic {
-					arg.Value += fmt.Sprintf(",%s", value)
+					arg.Value += "," + value
 				}
 			}
 		}
 	}
 
-	return commandConfig, nil
+	for k := range commandConfig.Flags {
+		if _, exist := store.Flags[k]; !exist {
+			store.Flags[k] = commandConfig.Flags[k].StoreDefault()
+		}
+	}
+	for k := range commandConfig.Args {
+		if _, exist := store.Args[k]; !exist {
+			store.Args[k] = commandConfig.Args[k].StoreDefault()
+		}
+	}
+
+	return store, nil
 }
 
 // NewRegistry returns new instance of the "Registry"
@@ -378,16 +399,28 @@ type CommandConfig struct {
 	Name string
 
 	// command-line flags
-	Flags map[string]*Flag
+	Flags map[string]*FlagCommand
 
 	// mapping of the short flag names with long flag names
 	flagsShort map[string]string
 
 	// registered command argument values
-	Args map[string]*Arg
+	Args map[string]*ArgCommand
 
 	// list of the argument names (for ordered iteration)
 	ArgNames []string
+}
+
+// CommandParsed type holds the structure and values of the command-line arguments of command (final parsed version).
+type CommandParsed struct {
+	// name of the sub-command ("" for the root command)
+	Name string
+
+	// command-line flags
+	Flags map[string]*Flag
+
+	// registered command argument values
+	Args map[string]*Arg
 }
 
 // AddArg registers an argument configuration with the command.
@@ -400,7 +433,7 @@ type CommandConfig struct {
 // If an argument with given `name` is already registered, then argument registration is skipped
 // and registered `*Arg` object returned.
 // If the argument is already registered, second return value will be `true`.
-func (commandConfig *CommandConfig) AddArg(name string, defaultValue string) (*Arg, bool) {
+func (commandConfig *CommandConfig) AddArg(name string, defaultValue string) (*ArgCommand, bool) {
 
 	// clean argument values
 	_name := removeWhitespaces(name)
@@ -419,7 +452,7 @@ func (commandConfig *CommandConfig) AddArg(name string, defaultValue string) (*A
 	}
 
 	// create `Arg` object
-	arg := &Arg{
+	arg := &ArgCommand{
 		Name:         _name,
 		DefaultValue: _defaultValue,
 		IsVariadic:   _isVariadic,
@@ -441,7 +474,7 @@ func (commandConfig *CommandConfig) AddArg(name string, defaultValue string) (*A
 // If an argument with given `name` is already registered, then argument registration is skipped
 // and registered `*Arg` object returned.
 // If the argument is already registered, second return value will be `true`.
-func (commandConfig *CommandConfig) AddArgWithValid(name string, defaultValue string, validVals []string) (*Arg, bool) {
+func (commandConfig *CommandConfig) AddArgWithValid(name string, defaultValue string, validVals []string) (*ArgCommand, bool) {
 	a, exist := commandConfig.AddArg(name, defaultValue)
 	a.SetValidVals(validVals)
 	return a, exist
@@ -459,7 +492,7 @@ func (commandConfig *CommandConfig) AddArgWithValid(name string, defaultValue st
 // When command-line arguments contain `--no-<flag>`, the value of the `<flag>` becomes "false".
 // If a flag with given `name` is already registered, then flag registration is skipped and registered `*Flag` object returned.
 // If the flag is already registered, second return value will be `true`.
-func (commandConfig *CommandConfig) AddFlag(name string, shortName string, isBool bool, defaultValue string) (*Flag, bool) {
+func (commandConfig *CommandConfig) AddFlag(name string, shortName string, isBool bool, defaultValue string) (*FlagCommand, bool) {
 
 	// clean argument values
 	_name := removeWhitespaces(name)
@@ -494,7 +527,7 @@ func (commandConfig *CommandConfig) AddFlag(name string, shortName string, isBoo
 	}
 
 	// create a `Flag` object
-	flag := &Flag{
+	flag := &FlagCommand{
 		Name:         _name,
 		ShortName:    _shortName,
 		IsBoolean:    isBool,
@@ -526,7 +559,7 @@ func (commandConfig *CommandConfig) AddFlag(name string, shortName string, isBoo
 // The `validVals`  argument represents valid values for argument
 // If a flag with given `name` is already registered, then flag registration is skipped and registered `*Flag` object returned.
 // If the flag is already registered, second return value will be `true`.
-func (commandConfig *CommandConfig) AddFlagWithValid(name string, shortName string, isBool bool, defaultValue string, validVals []string) (*Flag, bool) {
+func (commandConfig *CommandConfig) AddFlagWithValid(name string, shortName string, isBool bool, defaultValue string, validVals []string) (*FlagCommand, bool) {
 	f, exist := commandConfig.AddFlag(name, shortName, isBool, defaultValue)
 	f.SetValidVals(validVals)
 	return f, exist
@@ -534,8 +567,8 @@ func (commandConfig *CommandConfig) AddFlagWithValid(name string, shortName stri
 
 /*---------------------*/
 
-// Flag type holds the structured information about a flag.
-type Flag struct {
+// FlagCommand type holds the structured information about a flag.
+type FlagCommand struct {
 
 	// long name of the flag
 	Name string
@@ -564,7 +597,7 @@ type Flag struct {
 	// ValidValsFunction func(args []string, toComplete string) []string
 }
 
-func (f *Flag) SetValidVals(validVals []string) *Flag {
+func (f *FlagCommand) SetValidVals(validVals []string) *FlagCommand {
 	if len(validVals) == 0 {
 		f.ValidVals = nil
 	} else {
@@ -576,7 +609,7 @@ func (f *Flag) SetValidVals(validVals []string) *Flag {
 	return f
 }
 
-func (f *Flag) Validate(v string) bool {
+func (f *FlagCommand) Validate(v string) bool {
 	if len(f.ValidVals) > 0 {
 		if _, exist := f.ValidVals[v]; exist {
 			return true
@@ -586,10 +619,38 @@ func (f *Flag) Validate(v string) bool {
 	return true
 }
 
+func (f *FlagCommand) Store(v string) *Flag {
+	return &Flag{
+		Name:      f.Name,
+		IsBoolean: f.IsBoolean,
+		Value:     v,
+	}
+}
+
+func (f *FlagCommand) StoreDefault() *Flag {
+	return &Flag{
+		Name:      f.Name,
+		IsBoolean: f.IsBoolean,
+		Value:     f.DefaultValue,
+	}
+}
+
+// Flag type holds the structured information about a flag.
+type Flag struct {
+	// long name of the flag
+	Name string
+
+	// if the flag holds boolean value
+	IsBoolean bool
+
+	// value of the flag (provided by the user)
+	Value string
+}
+
 /*---------------------*/
 
-// Arg type holds the structured information about an argument.
-type Arg struct {
+// ArgCommand type holds the structured information about an argument.
+type ArgCommand struct {
 	// name of the argument
 	Name string
 
@@ -601,6 +662,7 @@ type Arg struct {
 
 	// value of the argument (provided by the user)
 	Value string
+
 	// ValidVals is list of all valid arg values that are accepted
 	ValidVals map[string]bool
 
@@ -610,7 +672,7 @@ type Arg struct {
 	// ValidValsFunction func(args []string, toComplete string) []string
 }
 
-func (a *Arg) SetValidVals(validVals []string) *Arg {
+func (a *ArgCommand) SetValidVals(validVals []string) *ArgCommand {
 	if len(validVals) == 0 {
 		a.ValidVals = nil
 	} else {
@@ -622,7 +684,7 @@ func (a *Arg) SetValidVals(validVals []string) *Arg {
 	return a
 }
 
-func (a *Arg) Validate(v string) bool {
+func (a *ArgCommand) Validate(v string) bool {
 	if len(a.ValidVals) > 0 {
 		if _, exist := a.ValidVals[v]; exist {
 			return true
@@ -630,4 +692,33 @@ func (a *Arg) Validate(v string) bool {
 		return false
 	}
 	return true
+}
+
+func (a *ArgCommand) Store(v string) *Arg {
+	return &Arg{
+		Name:       a.Name,
+		IsVariadic: a.IsVariadic,
+		Value:      v,
+	}
+
+}
+
+func (a *ArgCommand) StoreDefault() *Arg {
+	return &Arg{
+		Name:       a.Name,
+		IsVariadic: a.IsVariadic,
+		Value:      a.DefaultValue,
+	}
+}
+
+// Arg type holds the structured information about an argument.
+type Arg struct {
+	// name of the argument
+	Name string
+
+	// variadic argument can take multiple values
+	IsVariadic bool
+
+	// value of the argument (provided by the user)
+	Value string
 }
